@@ -1,0 +1,10 @@
+# Tệp dữ liệu làm việc cá nhân – không đưa lên GitHub
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+
+# Cấu hình cục bộ / bí mật
+.env
+.env.*
+.vercel/

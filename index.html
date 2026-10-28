@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard KQKD Deli – Quý 3/2026</title>
+<!-- Chart.js 4.4.1 (UMD) từ CDN jsDelivr -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --brand: #D5082D;
+    --brand-dark: #A80623;
+    --brand-soft: #FCE8EC;
+    --bg: #F5F6F8;
+    --card: #FFFFFF;
+    --text: #1F2328;
+    --muted: #667085;
+    --line: #E4E7EC;
+    --ok: #12805C;
+    --warn: #B54708;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    background: var(--brand);
+    color: #fff;
+    padding: 14px 16px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+  header .wrap { padding: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+  header .sub { font-size: 12px; opacity: .9; margin-top: 2px; }
+  .refresh-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  #btnRefresh {
+    background: #fff; color: var(--brand); border: 0; border-radius: 6px;
+    padding: 8px 16px; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  #btnRefresh:disabled { opacity: .6; cursor: wait; }
+  #status { font-size: 13px; }
+
+  main { padding: 16px 0 32px; }
+  .alert {
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+    border: 1px solid #F4B4C0; background: var(--brand-soft); color: #7A0418;
+  }
+  .alert h3 { margin: 0 0 6px; font-size: 15px; }
+  .alert ul { margin: 6px 0 0; padding-left: 20px; }
+  .note { border-color: #F7D9A8; background: #FFF8EC; color: #7A4B00; }
+
+  .filters {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; margin-bottom: 14px;
+  }
+  .filters label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+  select, input[type=search] {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    font-size: 14px; background: #fff; color: var(--text);
+  }
+  select:focus, input[type=search]:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; border-top: 4px solid var(--brand);
+  }
+  .kpi .label { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .kpi .value { font-size: 24px; font-weight: 700; margin: 6px 0 4px; word-break: break-word; }
+  .kpi .value small { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .kpi .formula { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .info-line {
+    font-size: 12.5px; color: var(--muted); margin: 10px 2px 16px; line-height: 1.6;
+  }
+  .info-line b { color: var(--text); }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+  }
+  .panel h2 { margin: 0 0 10px; font-size: 15px; }
+  .chart-box { position: relative; height: 290px; }
+  .empty {
+    display: none; position: absolute; inset: 0; align-items: center; justify-content: center;
+    color: var(--muted); font-weight: 600; background: var(--card);
+  }
+  .empty.show { display: flex; }
+
+  .table-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .table-head h2 { margin: 0; }
+  .table-head input { max-width: 340px; }
+  .table-scroll { overflow: auto; max-height: 560px; border: 1px solid var(--line); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+  th {
+    position: sticky; top: 0; background: #FAFAFB; cursor: pointer; user-select: none;
+    font-weight: 700; color: #344054; z-index: 1;
+  }
+  th:hover { color: var(--brand); }
+  th .arrow { color: var(--brand); font-size: 11px; margin-left: 3px; }
+  td.num, th.num { text-align: right; }
+  tbody tr:hover { background: #FFF5F7; }
+  .table-foot { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .td-empty { text-align: center; color: var(--muted); padding: 24px; font-weight: 600; white-space: normal; }
+
+  footer { font-size: 12px; color: var(--muted); text-align: center; padding: 0 16px 24px; }
+
+  @media (max-width: 960px) {
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .charts { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .filters { grid-template-columns: 1fr; }
+    .kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .kpi { padding: 10px; }
+    .kpi .value { font-size: 18px; }
+    header h1 { font-size: 17px; }
+    .chart-box { height: 250px; }
+    .table-head input { max-width: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div>
+      <h1>Dashboard Kết quả kinh doanh – Quý 3/2026</h1>
+      <div class="sub">Nguồn: Google Sheet “Demo9”, tab Du_lieu_sach · đọc trực tiếp mỗi lần mở trang</div>
+    </div>
+    <div class="refresh-box">
+      <span id="status" aria-live="polite">Đang tải…</span>
+      <button id="btnRefresh" type="button">↻ Làm mới</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="errorBox" class="alert" hidden></div>
+  <div id="skipBox" class="alert note" hidden></div>
+
+  <section class="filters" aria-label="Bộ lọc">
+    <div>
+      <label for="fMonth">Tháng</label>
+      <select id="fMonth"><option value="">Tất cả</option></select>
+    </div>
+    <div>
+      <label for="fRegion">Khu vực</label>
+      <select id="fRegion"><option value="">Tất cả</option></select>
+    </div>
+    <div>
+      <label for="fGroup">Nhóm sản phẩm</label>
+      <select id="fGroup"><option value="">Tất cả</option></select>
+    </div>
+  </section>
+
+  <section class="kpis">
+    <div class="kpi">
+      <div class="label">Doanh thu KQKD</div>
+      <div class="value" id="kRev">–</div>
+      <div class="formula">= Tổng “Doanh thu tính KQKD (VND)” của các dòng Hợp lệ = Y</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Lợi nhuận gộp</div>
+      <div class="value" id="kGp">–</div>
+      <div class="formula">= Doanh thu KQKD − Giá vốn KQKD (tổng “Giá vốn tính KQKD (VND)”)</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Biên lợi nhuận gộp</div>
+      <div class="value" id="kMargin">–</div>
+      <div class="formula">= Lợi nhuận gộp ÷ Doanh thu KQKD</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Số đơn hợp lệ</div>
+      <div class="value" id="kCount">–</div>
+      <div class="formula">= Số dòng có Hợp lệ (Y/N) = Y</div>
+    </div>
+  </section>
+  <div class="info-line" id="invalidLine"></div>
+
+  <section class="charts">
+    <div class="panel">
+      <h2>Doanh thu KQKD theo tháng (VND)</h2>
+      <div class="chart-box">
+        <canvas id="chMonth"></canvas>
+        <div class="empty" id="emMonth">Không có dữ liệu</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Doanh thu KQKD theo Nhóm sản phẩm (VND)</h2>
+      <div class="chart-box">
+        <canvas id="chGroup"></canvas>
+        <div class="empty" id="emGroup">Không có dữ liệu</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="table-head">
+      <h2>Chi tiết đơn hợp lệ</h2>
+      <input type="search" id="q" placeholder="Tìm mã đơn, mã khách hàng, tên sản phẩm…" aria-label="Tìm kiếm">
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-foot" id="tableFoot"></div>
+  </section>
+</main>
+
+<footer>Chỉ tính doanh thu và giá vốn từ các dòng Hợp lệ (Y/N) = Y. Số liệu định dạng kiểu Việt Nam, đơn vị VND.</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var SHEET_ID = '1mUwCJVsAYIdsHITg7lOLM_R_2ccwEq0j56CM4jgVnYc';
+  var SHEET_TAB = 'Du_lieu_sach';
+  var CSV_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+                '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_TAB);
+
+  // Tên cột trong Sheet (đọc theo tiêu đề, không theo vị trí)
+  var COL = {
+    date:    'Ngày đơn hàng',
+    order:   'Mã đơn hàng',
+    region:  'Khu vực',
+    cust:    'Mã khách hàng',
+    group:   'Nhóm sản phẩm',
+    product: 'Tên sản phẩm',
+    qty:     'Số lượng',
+    status:  'Trạng thái đơn',
+    valid:   'Hợp lệ (Y/N)',
+    reason:  'Lý do không hợp lệ',
+    rev:     'Doanh thu tính KQKD (VND)',
+    cogs:    'Giá vốn tính KQKD (VND)'
+  };
+
+  var BRAND = '#D5082D';
+  var nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+  var pf = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  var state = {
+    rows: [],          // các dòng đã đọc hợp lệ về kiểu dữ liệu
+    totalRead: 0,      // tổng số dòng dữ liệu đọc được
+    skipped: [],       // dòng bị bỏ qua: { line, why }
+    sortKey: 'date',
+    sortDir: 1,
+    loading: false
+  };
+  var charts = { month: null, group: null };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- Đọc CSV ----------
+  function parseCSV(text) {
+    var out = [], row = [], field = '', i = 0, inQ = false, c;
+    text = text.replace(/^﻿/, '');
+    while (i < text.length) {
+      c = text[i];
+      if (inQ) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQ = false;
+        } else field += c;
+      } else if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); out.push(row); row = []; field = '';
+      } else field += c;
+      i++;
+    }
+    if (field !== '' || row.length) { row.push(field); out.push(row); }
+    return out.filter(function (r) { return r.some(function (v) { return v.trim() !== ''; }); });
+  }
+
+  function norm(s) { return String(s || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase(); }
+
+  // Bỏ dấu phẩy ngăn cách nghìn, ký hiệu %, khoảng trắng → số. Rỗng → null; sai kiểu → NaN
+  function toNumber(s) {
+    var t = String(s == null ? '' : s).replace(/[,%\s ]/g, '');
+    if (t === '') return null;
+    if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
+    return Number(t);
+  }
+
+  // Nhận yyyy-mm-dd hoặc dd/mm/yyyy
+  function toDate(s) {
+    var t = String(s || '').trim(), m, y, mo, d;
+    if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+    else return null;
+    var dt = new Date(y, mo - 1, d);
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return dt;
+  }
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmtDate(d) { return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear(); }
+  function fmtStamp(d) {
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' ' + fmtDate(d);
+  }
+  function monthKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+  function monthLabel(k) { var p = k.split('-'); return 'Tháng ' + (+p[1]) + '/' + p[0]; }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function SheetError(kind, detail) { this.kind = kind; this.detail = detail; }
+
+  function buildRows(table) {
+    if (!table.length) throw new SheetError('empty');
+    var header = table[0].map(norm);
+    var idx = {}, missing = [];
+    Object.keys(COL).forEach(function (k) {
+      var pos = header.indexOf(norm(COL[k]));
+      if (pos < 0) missing.push(COL[k]);
+      idx[k] = pos;
+    });
+    if (missing.length) throw new SheetError('columns', missing);
+
+    var rows = [], skipped = [];
+    for (var r = 1; r < table.length; r++) {
+      var line = table[r], get = function (k) { return (line[idx[k]] || '').trim(); };
+      var sheetRow = r + 1;
+      var date = toDate(get('date'));
+      if (!date) { skipped.push({ line: sheetRow, why: get('date') ? 'ngày sai định dạng' : 'thiếu ngày' }); continue; }
+
+      var qty = toNumber(get('qty')), rev = toNumber(get('rev')), cogs = toNumber(get('cogs'));
+      var valid = get('valid').toUpperCase() === 'Y';
+      if ([qty, rev, cogs].some(function (v) { return Number.isNaN(v); })) {
+        skipped.push({ line: sheetRow, why: 'sai kiểu số' }); continue;
+      }
+      // Dòng hợp lệ phải có đủ doanh thu và giá vốn KQKD (không tự điền giá trị thiếu)
+      if (valid && (rev === null || cogs === null)) {
+        skipped.push({ line: sheetRow, why: 'thiếu doanh thu/giá vốn KQKD' }); continue;
+      }
+      rows.push({
+        date: date, month: monthKey(date),
+        order: get('order'), region: get('region'), cust: get('cust'),
+        group: get('group'), product: get('product'), qty: qty,
+        status: get('status'), valid: valid, reason: get('reason'),
+        rev: rev, cogs: cogs
+      });
+    }
+    return { rows: rows, total: table.length - 1, skipped: skipped };
+  }
+
+  // ---------- Tải dữ liệu ----------
+  function load() {
+    if (state.loading) return;
+    state.loading = true;
+    $('btnRefresh').disabled = true;
+    $('status').textContent = 'Đang tải…';
+
+    fetch(CSV_URL, { cache: 'no-store' })
+      .catch(function () { throw new SheetError('network'); })
+      .then(function (res) {
+        if (!res.ok) throw new SheetError('http', res.status);
+        var type = res.headers.get('content-type') || '';
+        return res.text().then(function (txt) {
+          if (/text\/html/i.test(type) || /^\s*<(!doctype|html)/i.test(txt)) throw new SheetError('html');
+          return txt;
+        });
+      })
+      .then(function (txt) {
+        var parsed = buildRows(parseCSV(txt));
+        state.rows = parsed.rows;
+        state.totalRead = parsed.total;
+        state.skipped = parsed.skipped;
+        $('errorBox').hidden = true;
+        fillFilters();
+        render();
+        $('status').textContent = 'Cập nhật lúc ' + fmtStamp(new Date());
+      })
+      .catch(function (err) {
+        showError(err);
+        $('status').textContent = state.rows.length
+          ? 'Lỗi tải mới – đang hiển thị dữ liệu lần trước'
+          : 'Không tải được dữ liệu';
+        if (!state.rows.length) render();
+      })
+      .then(function () {
+        state.loading = false;
+        $('btnRefresh').disabled = false;
+      });
+  }
+
+  function showError(err) {
+    var box = $('errorBox'), title = 'Không đọc được dữ liệu từ Google Sheet', detail = '';
+    var causes = [
+      'Sheet chưa được chia sẻ “Bất kỳ ai có đường liên kết” (quyền Người xem).',
+      'Sai tên tab: dashboard cần tab “' + SHEET_TAB + '”.',
+      'Mất kết nối mạng hoặc mạng nội bộ chặn docs.google.com.'
+    ];
+    if (err instanceof SheetError) {
+      if (err.kind === 'network') detail = 'Không kết nối được tới Google Sheet.';
+      else if (err.kind === 'http') detail = 'Google Sheet trả về mã lỗi ' + err.detail + '.';
+      else if (err.kind === 'html') detail = 'Google trả về trang đăng nhập thay vì dữ liệu – nhiều khả năng Sheet chưa được chia sẻ công khai.';
+      else if (err.kind === 'empty') detail = 'Tab không có dữ liệu.';
+      else if (err.kind === 'columns') detail = 'Không tìm thấy các cột: ' + err.detail.join(', ') + '. Có thể sai tên tab hoặc tiêu đề cột đã bị đổi.';
+    } else {
+      detail = 'Lỗi không xác định: ' + (err && err.message ? err.message : err);
+    }
+    box.innerHTML = '<h3>' + esc(title) + '</h3><div>' + esc(detail) + '</div>' +
+      '<div style="margin-top:6px">Nguyên nhân có thể:</div><ul>' +
+      causes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') +
+      '</ul><div style="margin-top:6px">Kiểm tra lại rồi bấm “Làm mới”.</div>';
+    box.hidden = false;
+  }
+
+  // ---------- Bộ lọc ----------
+  function fillSelect(sel, values, labelFn) {
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">Tất cả</option>' + values.map(function (v) {
+      return '<option value="' + esc(v) + '">' + esc(labelFn ? labelFn(v) : v) + '</option>';
+    }).join('');
+    if (values.indexOf(cur) >= 0) sel.value = cur;
+  }
+  function uniq(key) {
+    var s = {};
+    state.rows.forEach(function (r) { if (r[key]) s[r[key]] = 1; });
+    return Object.keys(s).sort(function (a, b) { return a.localeCompare(b, 'vi'); });
+  }
+  function fillFilters() {
+    fillSelect($('fMonth'), uniq('month'), monthLabel);
+    fillSelect($('fRegion'), uniq('region'));
+    fillSelect($('fGroup'), uniq('group'));
+  }
+  function filtered() {
+    var m = $('fMonth').value, rg = $('fRegion').value, g = $('fGroup').value;
+    return state.rows.filter(function (r) {
+      return (!m || r.month === m) && (!rg || r.region === rg) && (!g || r.group === g);
+    });
+  }
+
+  // ---------- Hiển thị ----------
+  function render() {
+    var scope = filtered();
+    var valid = scope.filter(function (r) { return r.valid; });
+    var rev = 0, cogs = 0;
+    valid.forEach(function (r) { rev += r.rev; cogs += r.cogs; });
+    var gp = rev - cogs;
+    var hasData = valid.length > 0;
+    var filterOn = $('fMonth').value || $('fRegion').value || $('fGroup').value;
+    var totalScope = filterOn ? scope.length : state.totalRead;
+
+    $('kRev').innerHTML = hasData ? nf.format(rev) + ' <small>VND</small>' : 'Không có dữ liệu';
+    $('kGp').innerHTML = hasData ? nf.format(gp) + ' <small>VND</small>' : 'Không có dữ liệu';
+    $('kMargin').textContent = hasData && rev !== 0 ? pf.format(gp / rev * 100) + '%' : 'Không có dữ liệu';
+    $('kCount').innerHTML = state.totalRead
+      ? nf.format(valid.length) + ' <small>trên tổng ' + nf.format(totalScope) + ' dòng' + (filterOn ? ' (theo bộ lọc)' : '') + '</small>'
+      : 'Không có dữ liệu';
+
+    // Dòng không tính KQKD, chia theo lý do
+    var inv = scope.filter(function (r) { return !r.valid; }), byReason = {};
+    inv.forEach(function (r) { var k = r.reason || '(không ghi lý do)'; byReason[k] = (byReason[k] || 0) + 1; });
+    var parts = Object.keys(byReason).sort(function (a, b) { return byReason[b] - byReason[a]; })
+      .map(function (k) { return esc(k) + ': <b>' + nf.format(byReason[k]) + '</b>'; });
+    $('invalidLine').innerHTML = state.totalRead
+      ? 'Không tính KQKD: <b>' + nf.format(inv.length) + '</b> đơn' + (parts.length ? ' — ' + parts.join(' · ') : '')
+      : '';
+
+    // Dòng bị bỏ qua do lỗi dữ liệu
+    var sb = $('skipBox');
+    if (state.totalRead) {
+      if (state.skipped.length) {
+        sb.innerHTML = 'Đã bỏ qua <b>' + state.skipped.length + '</b> dòng do thiếu ngày hoặc sai kiểu số (dòng ' +
+          state.skipped.slice(0, 15).map(function (s) { return s.line + ': ' + esc(s.why); }).join('; ') +
+          (state.skipped.length > 15 ? '; …' : '') + ').';
+        sb.className = 'alert note';
+        sb.hidden = false;
+      } else {
+        sb.innerHTML = 'Đọc được <b>' + nf.format(state.totalRead) + '</b> dòng, bỏ qua <b>0</b> dòng do thiếu ngày hoặc sai kiểu số.';
+        sb.hidden = false;
+        sb.className = 'info-line';
+      }
+    } else sb.hidden = true;
+
+    renderCharts(valid);
+    renderTable(valid);
+  }
+
+  function renderCharts(valid) {
+    if (typeof Chart === 'undefined') {
+      $('emMonth').textContent = $('emGroup').textContent = 'Không tải được thư viện biểu đồ (kiểm tra mạng)';
+      $('emMonth').classList.add('show'); $('emGroup').classList.add('show');
+      return;
+    }
+    var byMonth = {}, byGroup = {};
+    valid.forEach(function (r) {
+      byMonth[r.month] = (byMonth[r.month] || 0) + r.rev;
+      byGroup[r.group || '(trống)'] = (byGroup[r.group || '(trống)'] || 0) + r.rev;
+    });
+    var mKeys = Object.keys(byMonth).sort();
+    var gKeys = Object.keys(byGroup).sort(function (a, b) { return byGroup[b] - byGroup[a]; });
+
+    $('emMonth').classList.toggle('show', !mKeys.length);
+    $('emGroup').classList.toggle('show', !gKeys.length);
+
+    var tip = { callbacks: { label: function (c) { return ' ' + nf.format(c.parsed[c.chart.options.indexAxis === 'y' ? 'x' : 'y']) + ' VND'; } } };
+    var tick = function (v) { return v >= 1e6 ? nf.format(v / 1e6) + ' tr' : nf.format(v); };
+
+    charts.month = upsert(charts.month, 'chMonth', {
+      type: 'bar',
+      data: { labels: mKeys.map(monthLabel), datasets: [{ data: mKeys.map(function (k) { return byMonth[k]; }), backgroundColor: BRAND, borderRadius: 4, maxBarThickness: 70 }] },
+      options: { indexAxis: 'x', maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip },
+        scales: { y: { beginAtZero: true, ticks: { callback: tick } } } }
+    });
+    charts.group = upsert(charts.group, 'chGroup', {
+      type: 'bar',
+      data: { labels: gKeys, datasets: [{ data: gKeys.map(function (k) { return byGroup[k]; }), backgroundColor: BRAND, borderRadius: 4, maxBarThickness: 40 }] },
+      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip },
+        scales: { x: { beginAtZero: true, ticks: { callback: tick } } } }
+    });
+  }
+  function upsert(chart, id, cfg) {
+    if (chart) { chart.data = cfg.data; chart.update(); return chart; }
+    return new Chart($(id), cfg);
+  }
+
+  var COLS = [
+    { key: 'date',    label: 'Ngày' },
+    { key: 'order',   label: 'Mã đơn hàng' },
+    { key: 'region',  label: 'Khu vực' },
+    { key: 'group',   label: 'Nhóm sản phẩm' },
+    { key: 'product', label: 'Tên sản phẩm' },
+    { key: 'qty',     label: 'Số lượng', num: true },
+    { key: 'rev',     label: 'Doanh thu KQKD', num: true },
+    { key: 'cogs',    label: 'Giá vốn KQKD', num: true }
+  ];
+
+  function renderHead() {
+    $('thead').innerHTML = COLS.map(function (c) {
+      var arrow = state.sortKey === c.key ? '<span class="arrow">' + (state.sortDir > 0 ? '▲' : '▼') + '</span>' : '';
+      return '<th data-key="' + c.key + '"' + (c.num ? ' class="num"' : '') + ' title="Bấm để sắp xếp">' + c.label + arrow + '</th>';
+    }).join('');
+  }
+
+  function renderTable(valid) {
+    renderHead();
+    var q = norm($('q').value);
+    var list = q ? valid.filter(function (r) {
+      return norm(r.order).indexOf(q) >= 0 || norm(r.cust).indexOf(q) >= 0 || norm(r.product).indexOf(q) >= 0;
+    }) : valid.slice();
+    var k = state.sortKey, dir = state.sortDir;
+    list.sort(function (a, b) {
+      var x = a[k], y = b[k];
+      if (x === null) return 1;
+      if (y === null) return -1;
+      if (x instanceof Date) return (x - y) * dir;
+      if (typeof x === 'number') return (x - y) * dir;
+      return String(x).localeCompare(String(y), 'vi') * dir;
+    });
+    if (!list.length) {
+      $('tbody').innerHTML = '<tr><td class="td-empty" colspan="' + COLS.length + '">Không có dữ liệu</td></tr>';
+    } else {
+      $('tbody').innerHTML = list.map(function (r) {
+        return '<tr><td>' + fmtDate(r.date) + '</td><td>' + esc(r.order) + '</td><td>' + esc(r.region) +
+          '</td><td>' + esc(r.group) + '</td><td>' + esc(r.product) +
+          '</td><td class="num">' + (r.qty === null ? '' : nf.format(r.qty)) +
+          '</td><td class="num">' + nf.format(r.rev) + '</td><td class="num">' + nf.format(r.cogs) + '</td></tr>';
+      }).join('');
+    }
+    $('tableFoot').textContent = 'Hiển thị ' + nf.format(list.length) + ' / ' + nf.format(valid.length) + ' đơn hợp lệ' +
+      (q ? ' (đang tìm “' + $('q').value.trim() + '”)' : '') + '. Bấm tiêu đề cột để sắp xếp.';
+  }
+
+  // ---------- Sự kiện ----------
+  $('btnRefresh').addEventListener('click', load);
+  ['fMonth', 'fRegion', 'fGroup'].forEach(function (id) { $(id).addEventListener('change', render); });
+  $('q').addEventListener('input', function () { renderTable(filtered().filter(function (r) { return r.valid; })); });
+  $('thead').addEventListener('click', function (e) {
+    var th = e.target.closest('th');
+    if (!th) return;
+    var key = th.getAttribute('data-key');
+    if (state.sortKey === key) state.sortDir = -state.sortDir;
+    else { state.sortKey = key; state.sortDir = 1; }
+    renderTable(filtered().filter(function (r) { return r.valid; }));
+  });
+
+  renderHead();
+  load();
+})();
+</script>
+</body>
+</html>
