@@ -130,7 +130,7 @@
   <div class="wrap">
     <div>
       <h1>Dashboard Kết quả kinh doanh – Quý 3/2026</h1>
-      <div class="sub">Nguồn: Google Sheet “Demo9”, tab Du_lieu_sach · đọc trực tiếp mỗi lần mở trang</div>
+      <div class="sub">Nguồn: Google Sheet “DEMO 9”, tab Du_lieu_sach · đọc trực tiếp mỗi lần mở trang</div>
     </div>
     <div class="refresh-box">
       <span id="status" aria-live="polite">Đang tải…</span>
@@ -162,12 +162,12 @@
     <div class="kpi">
       <div class="label">Doanh thu KQKD</div>
       <div class="value" id="kRev">–</div>
-      <div class="formula">= Tổng “Doanh thu tính KQKD (VND)” của các dòng Hợp lệ = Y</div>
+      <div class="formula" id="fRev">= Tổng doanh thu của các dòng hợp lệ</div>
     </div>
     <div class="kpi">
       <div class="label">Lợi nhuận gộp</div>
       <div class="value" id="kGp">–</div>
-      <div class="formula">= Doanh thu KQKD − Giá vốn KQKD (tổng “Giá vốn tính KQKD (VND)”)</div>
+      <div class="formula" id="fGp">= Doanh thu KQKD − Giá vốn KQKD</div>
     </div>
     <div class="kpi">
       <div class="label">Biên lợi nhuận gộp</div>
@@ -177,7 +177,7 @@
     <div class="kpi">
       <div class="label">Số đơn hợp lệ</div>
       <div class="value" id="kCount">–</div>
-      <div class="formula">= Số dòng có Hợp lệ (Y/N) = Y</div>
+      <div class="formula" id="fCount">= Số dòng hợp lệ</div>
     </div>
   </section>
   <div class="info-line" id="invalidLine"></div>
@@ -214,32 +214,34 @@
   </section>
 </main>
 
-<footer>Chỉ tính doanh thu và giá vốn từ các dòng Hợp lệ (Y/N) = Y. Số liệu định dạng kiểu Việt Nam, đơn vị VND.</footer>
+<footer>Chỉ tính doanh thu và giá vốn từ các dòng hợp lệ. Số liệu định dạng kiểu Việt Nam, đơn vị VND.</footer>
 
 <script>
 (function () {
   'use strict';
 
-  var SHEET_ID = '1mUwCJVsAYIdsHITg7lOLM_R_2ccwEq0j56CM4jgVnYc';
+  var SHEET_ID = '1ffdbv1H7ML5bjA1DqF4GHkmyXb6Dknd2-995GYA5DSg';
   var SHEET_TAB = 'Du_lieu_sach';
   var CSV_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
                 '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(SHEET_TAB);
 
-  // Tên cột trong Sheet (đọc theo tiêu đề, không theo vị trí)
+  // Tên cột trong Sheet (đọc theo tiêu đề, không theo vị trí).
+  // Mỗi chỉ tiêu có thể có nhiều tên: lấy tên đầu tiên tìm thấy trong hàng tiêu đề.
   var COL = {
-    date:    'Ngày đơn hàng',
-    order:   'Mã đơn hàng',
-    region:  'Khu vực',
-    cust:    'Mã khách hàng',
-    group:   'Nhóm sản phẩm',
-    product: 'Tên sản phẩm',
-    qty:     'Số lượng',
-    status:  'Trạng thái đơn',
-    valid:   'Hợp lệ (Y/N)',
-    reason:  'Lý do không hợp lệ',
-    rev:     'Doanh thu tính KQKD (VND)',
-    cogs:    'Giá vốn tính KQKD (VND)'
+    date:    ['Ngày đơn hàng'],
+    order:   ['Mã đơn hàng'],
+    region:  ['Khu vực'],
+    cust:    ['Mã khách hàng'],
+    group:   ['Nhóm sản phẩm'],
+    product: ['Tên sản phẩm'],
+    qty:     ['Số lượng'],
+    status:  ['Trạng thái đơn'],
+    valid:   ['Hop_le', 'Hợp lệ (Y/N)'],
+    reason:  ['Phan_loai', 'Lý do không hợp lệ'],
+    rev:     ['Doanh thu tính KQKD (VND)', 'Doanh thu (VND)'],
+    cogs:    ['Giá vốn tính KQKD (VND)', 'Giá vốn (VND)']
   };
+  var VALID_VALUES = ['y', 'có', 'co', 'yes'];
 
   var BRAND = '#D5082D';
   var nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
@@ -251,7 +253,8 @@
     skipped: [],       // dòng bị bỏ qua: { line, why }
     sortKey: 'date',
     sortDir: 1,
-    loading: false
+    loading: false,
+    colName: {}        // tên cột thực tế tìm thấy trong Sheet
   };
   var charts = { month: null, group: null };
 
@@ -282,10 +285,14 @@
 
   function norm(s) { return String(s || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase(); }
 
-  // Bỏ dấu phẩy ngăn cách nghìn, ký hiệu %, khoảng trắng → số. Rỗng → null; sai kiểu → NaN
+  // Bỏ ký hiệu %, khoảng trắng và dấu ngăn cách nghìn (135,000 hoặc 135.000) → số.
+  // Rỗng → null; sai kiểu → NaN
   function toNumber(s) {
-    var t = String(s == null ? '' : s).replace(/[,%\s ]/g, '');
+    var t = String(s == null ? '' : s).replace(/[%\s ]/g, '');
     if (t === '') return null;
+    if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
+    else if (/^-?\d+(,\d+)?$/.test(t)) t = t.replace(',', '.');
     if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
     return Number(t);
   }
@@ -321,8 +328,12 @@
     var header = table[0].map(norm);
     var idx = {}, missing = [];
     Object.keys(COL).forEach(function (k) {
-      var pos = header.indexOf(norm(COL[k]));
-      if (pos < 0) missing.push(COL[k]);
+      var pos = -1;
+      for (var i = 0; i < COL[k].length && pos < 0; i++) {
+        pos = header.indexOf(norm(COL[k][i]));
+        if (pos >= 0) state.colName[k] = table[0][pos].trim();
+      }
+      if (pos < 0) missing.push(COL[k].join(' / '));
       idx[k] = pos;
     });
     if (missing.length) throw new SheetError('columns', missing);
@@ -335,7 +346,7 @@
       if (!date) { skipped.push({ line: sheetRow, why: get('date') ? 'ngày sai định dạng' : 'thiếu ngày' }); continue; }
 
       var qty = toNumber(get('qty')), rev = toNumber(get('rev')), cogs = toNumber(get('cogs'));
-      var valid = get('valid').toUpperCase() === 'Y';
+      var valid = VALID_VALUES.indexOf(norm(get('valid'))) >= 0;
       if ([qty, rev, cogs].some(function (v) { return Number.isNaN(v); })) {
         skipped.push({ line: sheetRow, why: 'sai kiểu số' }); continue;
       }
@@ -377,6 +388,7 @@
         state.totalRead = parsed.total;
         state.skipped = parsed.skipped;
         $('errorBox').hidden = true;
+        setFormulas();
         fillFilters();
         render();
         $('status').textContent = 'Cập nhật lúc ' + fmtStamp(new Date());
@@ -415,6 +427,14 @@
       causes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') +
       '</ul><div style="margin-top:6px">Kiểm tra lại rồi bấm “Làm mới”.</div>';
     box.hidden = false;
+  }
+
+  // Chú thích công thức dưới thẻ KPI, ghi đúng tên cột đang đọc từ Sheet
+  function setFormulas() {
+    var c = state.colName, cond = '“' + c.valid + '” = hợp lệ (Có/Y)';
+    $('fRev').textContent = '= Tổng “' + c.rev + '” của các dòng ' + cond;
+    $('fGp').textContent = '= Doanh thu KQKD − Giá vốn KQKD (tổng “' + c.cogs + '”)';
+    $('fCount').textContent = '= Số dòng có ' + cond;
   }
 
   // ---------- Bộ lọc ----------
